@@ -20,6 +20,9 @@ import lib
 import lib.photo
 import lib.dataset
 import lib.transformations
+import src.data
+from lib.metric import CrossEntropyLoss
+from lib.training import Training
 
 parser = argparse.ArgumentParser(description='KFold training')
 
@@ -37,6 +40,14 @@ args = parser.parse_args()
 model_id = "facebook/convnext-large-384-22k-1k"
 model_preprocessor = AutoImageProcessor.from_pretrained(model_id)
 data_dir = Path(__file__) / "data"
+num_classes = len(src.data.species_labels)
+
+training = Training(
+    checkpoint_dir=args.checkpoint_dir,
+    seed=args.seed,
+    num_gpus=1,
+    gpu_id=args.gpuid,
+)
 
 #-----------------------------------------------------------------------------------------------------------------------
 for fold in range(args.num_folds):
@@ -60,91 +71,81 @@ for fold in range(args.num_folds):
         num_workers=args.num_workers,
     )
 
+    model = create_model()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-
-def train_model(model, optimizer, scheduler, num_epochs=10):
-    for epoch in range(num_epochs):
-        print(f"Starting epoch {epoch}")
-
-
-
-
-
-#%%
-criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-
-# criterion = lib.sce_loss
-#%% md
-# ### Cutmix + mixup
-#%%
-from torchvision.transforms import v2
-
-use_cutmix_mixup = True
-
-cutmix = v2.CutMix(alpha=0.3, num_classes=len(data.species_labels))
-mixup = v2.MixUp(alpha=0.3, num_classes=len(data.species_labels))
-cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
-#%%
-# steps_per_epoch = len(train_loader)
-#
-# def scheduler(step):
-#
-
-
-
-
-for cur_epoch in range(epoch, epoch + num_epochs):
-    await asyncio.sleep(0)
-
-    if stop_flag['value'] == True:
-        break
-
-    print(f"Starting epoch {cur_epoch}")
-
-    model.train()
-
-    loss_acc = 0
-    count = 0
-
-    for idx, batch in tqdm.tqdm(enumerate(train_loader), total=len(train_loader), desc='Training'):
-        optimizer.zero_grad(set_to_none=True)
-
-        images, labels = batch["pixel_values"].to(torch.device("cuda")), batch["labels"].to(torch.device("cuda"))
-
-        if use_cutmix_mixup:
-            images, labels = cutmix_or_mixup(images, labels)
-
-        refined_labels_df = model(images)              # logits: (B, 2)
-        loss = criterion(refined_labels_df.logits, labels)
-
-        c = batch['pixel_values'].size(0)
-        loss_acc += loss.item() * c
-        count += c
-
-        loss.backward()
-        optimizer.step()
-
-    tracking_loss.append(loss_acc / count)
-
-    # валидация
-    model.eval()
-
-    probs, loss_acc = predict_siglip(
-        model, val_loader, accumulate_probs=True, accumulate_loss=True, desc='Validation', columns=data.species_labels, criterion=criterion
+    training = Training(
+        model=model,
+        optimizer=optimizer,
+        num_classes=num_classes,
+        name=f"Fold {fold}",
     )
-    tracking_val_probs.append(probs)
-    tracking_loss_val.append(loss_acc)
 
-    eval_predictions = probs.idxmax(axis=1)
-    eval_true = data.y_eval.idxmax(axis=1)
-    correct = (eval_predictions == eval_true).sum()
-    accuracy = correct / len(eval_predictions)
-    tracking_accuracy.append(accuracy.item())
+    training.train(
+        train_loader,
+        desc='Training',
+        metrics=[
+            CrossEntropyLoss(ce=nn.CrossEntropyLoss(label_smoothing=0.1)),
+        ]
+    )
 
-    model.epoch = cur_epoch
-    lib.save_model(model, optimizer, f"./models_convnext_large_384/checkpoint_{str(cur_epoch).rjust(2, "0")}.pth")
 
-    epoch = cur_epoch + 1
+
+
+
+
+# for cur_epoch in range(epoch, epoch + num_epochs):
+#     await asyncio.sleep(0)
+#
+#     if stop_flag['value'] == True:
+#         break
+#
+#     print(f"Starting epoch {cur_epoch}")
+#
+#     model.train()
+#
+#     loss_acc = 0
+#     count = 0
+#
+#     for idx, batch in tqdm.tqdm(enumerate(train_loader), total=len(train_loader), desc='Training'):
+#         optimizer.zero_grad(set_to_none=True)
+#
+#         images, labels = batch["pixel_values"].to(torch.device("cuda")), batch["labels"].to(torch.device("cuda"))
+#
+#         if use_cutmix_mixup:
+#             images, labels = cutmix_or_mixup(images, labels)
+#
+#         refined_labels_df = model(images)              # logits: (B, 2)
+#         loss = criterion(refined_labels_df.logits, labels)
+#
+#         c = batch['pixel_values'].size(0)
+#         loss_acc += loss.item() * c
+#         count += c
+#
+#         loss.backward()
+#         optimizer.step()
+#
+#     tracking_loss.append(loss_acc / count)
+#
+#     # валидация
+#     model.eval()
+#
+#     probs, loss_acc = predict_siglip(
+#         model, val_loader, accumulate_probs=True, accumulate_loss=True, desc='Validation', columns=data.species_labels, criterion=criterion
+#     )
+#     tracking_val_probs.append(probs)
+#     tracking_loss_val.append(loss_acc)
+#
+#     eval_predictions = probs.idxmax(axis=1)
+#     eval_true = data.y_eval.idxmax(axis=1)
+#     correct = (eval_predictions == eval_true).sum()
+#     accuracy = correct / len(eval_predictions)
+#     tracking_accuracy.append(accuracy.item())
+#
+#     model.epoch = cur_epoch
+#     lib.save_model(model, optimizer, f"./models_convnext_large_384/checkpoint_{str(cur_epoch).rjust(2, "0")}.pth")
+#
+#     epoch = cur_epoch + 1
 
 # #%% md
 # # ## Training progress
