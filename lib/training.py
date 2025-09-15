@@ -77,21 +77,21 @@ class Training(Inference):
             raise ValueError("No loss metric provided")
 
         self.model.train()
-        with torch.train_mode():
-            for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training { self.name }'):
-                batch = self.preprocess_batch_hook(batch)
 
-                input = batch['inputs'].to('cuda')
-                output = self.model(input)
+        for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training { self.name }'):
+            batch = self.preprocess_batch_hook(batch)
 
-                output.logits /= T
+            input = batch['inputs'].to('cuda')
+            output = self.model(input)
 
-                for metric in metrics:
-                    metric.update(self.model, input, output, batch)
+            output.logits /= T
 
-                loss.backward()
+            for metric in metrics:
+                metric.update(self.model, input, output, batch)
 
-                self.optimizer.step()
+            loss.backward()
+
+            self.optimizer.step()
 
 #-----------------------------------------------------------------------------------------------------------------------
 class TrainingWithCutmixMixup(Training):

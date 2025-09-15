@@ -4,13 +4,18 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 
-class DatasetWithLabel(Dataset):
+class DatasetFix(Dataset):
+    def __getitem__(self, idx):
+        return {}
+
+
+class DatasetWithLabel(DatasetFix):
     def __init__(self, *args, labels: pd.DataFrame=None, **kwargs):
         self.labels = labels
         super().__init__(*args, **kwargs)
 
     def get_label(self, idx):
-        return torch.tensor(self.labels.iloc[idx].values).float()
+        return torch.tensor(self.labels.iloc[idx]).float()
 
     def __getitem__(self, idx):
         sup = super().__getitem__(idx)
@@ -20,7 +25,7 @@ class DatasetWithLabel(Dataset):
         return sup
 
 
-class ImageDataset(Dataset):
+class ImageDataset(DatasetFix):
     def __init__(self, *args, data: pd.Series, processor, aug=None, **kwargs):
         self.data = data
 

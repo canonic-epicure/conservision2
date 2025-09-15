@@ -95,10 +95,11 @@ class Trainer():
         model_id, model_preprocessor=None,
         seed=None, checkpoint_storage, training_cls=Training,
         dataloader_train=None, dataloader_val=None,
+        loss=None, optimization_metric=None, metrics=[],
         patience=5,
         **kwargs
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__()
 
         self.name = name
         self.num_classes = num_classes
@@ -108,6 +109,10 @@ class Trainer():
         self.training_cls = training_cls
         self.seed = seed
         self.checkpoint_storage = checkpoint_storage
+
+        self.loss = loss
+        self.optimization_metric = optimization_metric
+        self.metrics = metrics
 
         self.current_epoch = None
         self.epochs = []
@@ -180,7 +185,7 @@ class Trainer():
         metrics = filter(lambda el: bool(el), [self.optimization_metric or self.loss, *self.metrics])
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
-        epoch_end = max(self.epoch_start + epochs_to_train, self.num_epochs)
+        epoch_end = max(epoch_start + epochs_to_train, self.num_epochs)
 
         for epoch_idx in range(epoch_start, epoch_end):
             epoch = self.start_epoch(epoch_idx)

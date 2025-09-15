@@ -42,7 +42,7 @@ class ConvNextLargeTrainer(Trainer):
         )
 
     def create_optimizer(self, model) -> Training:
-        raise torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+        return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
 
 
 class ConvNextLargeTraining(Training):
@@ -51,7 +51,7 @@ class ConvNextLargeTraining(Training):
 
 
 
-trainer = ConvNextLargeTrainer.load_or_create(
+trainer = ConvNextLargeTrainer(
     name="Convnext large",
     num_classes=num_classes,
     model_id=model_id,
