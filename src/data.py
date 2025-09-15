@@ -3,7 +3,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from PIL import Image
 from pathlib import Path
 
-data_dir = Path(__file__) / "../data"
+data_dir = Path(__file__).parent / "../data/"
 
 train_features = pd.read_csv(data_dir / "train_features.csv", index_col="id")
 test_features = pd.read_csv(data_dir / "test_features.csv", index_col="id")
@@ -18,7 +18,10 @@ def get_resolution(filename):
     with Image.open(filename) as img:
         return f'{img.size[0]}x{img.size[1]}'
 
-train_features['resolution'] = train_features['filepath'].apply(lambda filename: get_resolution('data/' + filename))
+train_features['filepath'] = str(data_dir) + '/' + train_features['filepath']
+test_features['filepath'] = str(data_dir) + '/' + test_features['filepath']
+
+train_features['resolution'] = train_features['filepath'].apply(lambda filename: get_resolution(filename))
 
 train_labels['label'] = train_labels.to_numpy().argmax(axis=1)
 

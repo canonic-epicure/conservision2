@@ -13,12 +13,15 @@ class DatasetWithLabel(Dataset):
         return torch.tensor(self.labels.iloc[idx].values).float()
 
     def __getitem__(self, idx):
-        return self.get_label(idx)
+        sup = super().__getitem__(idx)
+
+        sup['labels'] = self.get_label(idx)
+
+        return sup
 
 
 class ImageDataset(Dataset):
-    def __init__(self, *args, data_dir, data: pd.DataFrame, processor, aug=None, **kwargs):
-        self.data_dir = str(data_dir).rstrip('/') + '/'
+    def __init__(self, *args, data: pd.Series, processor, aug=None, **kwargs):
         self.data = data
 
         self.processor = processor
@@ -32,7 +35,7 @@ class ImageDataset(Dataset):
     def get_image(self, idx):
         image_id = self.data.index[idx]
 
-        image = Image.open(self.data_dir + self.data.iloc[idx]["filepath"]).convert("RGB")
+        image = Image.open(self.data.iloc[idx]).convert("RGB")
 
         image = self.aug(image) if self.aug else image
         image = self.processor(image)
@@ -40,7 +43,14 @@ class ImageDataset(Dataset):
         return image, image_id
 
     def __getitem__(self, idx):
-        return self.get_image(idx)
+        sup = super().__getitem__(idx)
+
+        image, image_id = self.get_image(idx)
+
+        sup['images'] = image
+        sup['ids'] = image_id
+
+        return sup
 
 
 class ImageDatasetWithLabel(DatasetWithLabel, ImageDataset):
@@ -48,6 +58,4 @@ class ImageDatasetWithLabel(DatasetWithLabel, ImageDataset):
         super().__init__(*args, **kwargs)
 
     def __getitem__(self, idx):
-        image, image_id = self.get_image(idx)
-
-        return image, self.get_label(idx), image_id
+        return super().__getitem__(idx)

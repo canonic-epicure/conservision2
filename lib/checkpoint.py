@@ -16,11 +16,14 @@ class CheckpointStorage():
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def latest(self, reg: Union[re.Pattern, str]) -> (Path, int):
+        if not self.dir.exists():
+            return None, None
+
         if not isinstance(reg, re.Pattern):
             reg = re.compile(reg)
 
         def collect():
-            for root, dirs, files in os.walk('.'):
+            for root, dirs, files in os.walk(self.dir):
                 for file in files:
                     match = reg.match(file)
                     if match:

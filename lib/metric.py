@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 from typing import List
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.nn import functional as F
 
-from lib.training import Training, Inference
+if TYPE_CHECKING:
+    from lib.training import Training, Inference
 
 
 class Metric():
-    name: str = 'Unknown metric'
+    id: str
+    name: str
 
-    def __init__(self, *args, name, **kwargs):
+    def __init__(self, *args, name='Unknown metric', **kwargs):
         super().__init__(*args, **kwargs)
 
-        if name is not None:
-            self.name = name
+        self.name = name
 
     def start(self, num_samples, num_batches):
         pass
@@ -47,9 +49,9 @@ class CrossEntropyLoss(Loss):
     track : List[float]
 
     def __init__(self, *args, ce=None, **kwargs):
-        self.name = 'Cross-entropy'
-
+        self.id = 'cross_entropy'
         super().__init__(*args, **kwargs)
+        self.name = 'Cross-entropy'
 
         self.acc = 0
         self.count = 0
@@ -71,7 +73,7 @@ class CrossEntropyLoss(Loss):
         return self.acc / self.count
 
     def update(self, model: Inference, input, output, batch):
-        self.last_value = self.ce(output.logits, model.batch_to_label(batch))
+        self.last_value = self.ce(output.logits, batch['labels'])
         self.push(self.last_value)
         self.track.append(self.last_value)
 
@@ -82,7 +84,7 @@ class CrossEntropyLoss(Loss):
 class ProbabilitiesMetric(Metric):
     pos: int
     probs : torch.Tensor
-    idx : np.array
+    ids : np.array
 
     num_samples: int
 
@@ -94,8 +96,9 @@ class ProbabilitiesMetric(Metric):
     def start(self, num_samples, num_batches, num_classes):
         self.num_samples = num_samples
 
+        self.pos = 0
         self.probs = torch.zeros((num_samples, num_classes), dtype=torch.float32)
-        self.idx = np.empty((num_samples), dtype=np.dtypes.ObjectDType)
+        self.ids = np.empty((num_samples), dtype=np.dtypes.ObjectDType)
 
     def value(self):
         return self.probs
@@ -103,61 +106,78 @@ class ProbabilitiesMetric(Metric):
     def value_as_df(self, columns=None):
         return pd.DataFrame(
             self.probs.detach().to('cpu').numpy(),
-            index=self.idx,
+            index=self.ids,
             columns=columns,
         )
 
     def update(self, model, input, output, batch):
         preds = F.softmax(output.logits, dim=1)
 
-        batch_size = model.batch_size(batch)
+        batch_size = batch['inputs'].size(0)
 
         if self.pos >= self.num_samples:
             raise OverflowError("Out of bounds")
 
         self.probs[self.pos:self.pos + batch_size] = preds
-        self.idx[self.pos:self.pos + batch_size] = model.batch_to_idx(batch)
+        self.ids[self.pos:self.pos + batch_size] = batch['ids']
 
         self.pos += batch_size
 
 
 class AccuracyMetric(Metric):
     pos: int
-    probs : torch.Tensor
-    idx : np.array
+    pred_cls_idx : torch.Tensor
+    true_cls_idx: torch.Tensor
+    accuracy: torch.Tensor
+    ids : np.array
 
     num_samples: int
 
     def __init__(self, *args, **kwargs):
+        self.id = 'accuracy'
+
         super().__init__(*args, **kwargs)
+
+        self.name = 'Accuracy'
 
         self.pos = 0
 
     def start(self, num_samples, num_batches, num_classes):
         self.num_samples = num_samples
 
-        self.probs = torch.zeros((num_samples, num_classes), dtype=torch.float32)
-        self.idx = np.empty((num_samples), dtype=np.dtypes.ObjectDType)
+        self.pos = 0
+        self.pred_cls_idx = torch.zeros((num_samples), dtype=torch.int8)
+        self.true_cls_idx = torch.zeros((num_samples), dtype=torch.int8)
+        self.accuracy = torch.zeros((num_samples), dtype=torch.float32)
+        self.ids = np.empty((num_samples), dtype=np.dtypes.ObjectDType)
 
     def value(self):
-        return self.probs
+        return self.accuracy.mean()
 
     def value_as_df(self, columns=None):
         return pd.DataFrame(
-            self.probs.detach().to('cpu').numpy(),
-            index=self.idx,
+            [
+                self.pred_cls_idx.detach().to('cpu').numpy(),
+                self.true_cls_idx.detach().to('cpu').numpy(),
+                self.accuracy.detach().to('cpu').numpy(),
+            ],
+            index=self.ids,
             columns=columns,
         )
 
     def update(self, model, input, output, batch):
         preds = F.softmax(output.logits, dim=1)
 
-        batch_size = model.batch_size(batch)
+        pred_cls_idx = preds.argmax(dim=1)
+
+        batch_size = batch['inputs'].size(0)
 
         if self.pos >= self.num_samples:
             raise OverflowError("Out of bounds")
 
-        self.probs[self.pos:self.pos + batch_size] = preds
-        self.idx[self.pos:self.pos + batch_size] = model.batch_to_idx(batch)
+        self.pred_cls_idx[self.pos:self.pos + batch_size] = pred_cls_idx
+        self.true_cls_idx[self.pos:self.pos + batch_size] = batch['labels']
+        self.accuracy[self.pos:self.pos + batch_size] = pred_cls_idx == batch['labels']
+        self.ids[self.pos:self.pos + batch_size] = batch['ids']
 
         self.pos += batch_size

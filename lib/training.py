@@ -1,24 +1,15 @@
 from __future__ import annotations
+
 from typing import List
 
 import torch
+import torchvision.transforms.v2 as v2
 import tqdm
 from torch.utils.data import DataLoader
-import torchvision.transforms.v2 as v2
 
 from lib.metric import Metric, Loss, ProbabilitiesMetric
 
-
-class Epoch():
-    epoch: int
-
-    loss: List[float]
-
-    def __init__(self, *args, model, epoch=0, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.epoch = epoch
-
-
+#-----------------------------------------------------------------------------------------------------------------------
 class Inference():
     name: str       = 'Unknown model'
 
@@ -32,42 +23,20 @@ class Inference():
         self.num_classes = num_classes
 
 
-    def set_input_to_batch(self, input, batch):
-        return (input,) + batch[1:]
-
-    def batch_to_input(self, batch):
-        return batch[0]
-
-
-    def set_label_to_batch(self, label, batch):
-        return (batch[0], label) + batch[2:]
-
-    def batch_to_label(self, batch):
-        return batch[1]
-
-
-    def batch_to_idx(self, batch):
-        return batch[-1]
-
-
-    def batch_size(self, batch):
-        return batch[0].size(0)
-
-
     def preprocess_batch_hook(self, batch):
         return batch
 
 
-    def infer(self, data_loader: DataLoader, desc='Predicting', metrics: List[Metric]=[], T=1):
+    def infer(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], T=1):
         for metric in metrics:
             metric.start(len(data_loader.dataset), len(data_loader), self.num_classes)
 
         self.model.eval()
         with torch.inference_mode():
-            for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc):
+            for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Inference { self.name }'):
                 batch = self.preprocess_batch_hook(batch)
 
-                input = self.batch_to_input(batch).to('cuda')
+                input = batch['inputs'].to('cuda')
                 output = self.model(input)
 
                 output.logits /= T
@@ -83,7 +52,7 @@ class Inference():
 
         return probs
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class Training(Inference):
     optimizer: any
 
@@ -93,11 +62,7 @@ class Training(Inference):
         self.optimizer = optimizer
 
 
-    def start_epoch(self, epoch):
-        self.epoch = epoch
-
-
-    def train(self, data_loader: DataLoader, desc='Predicting', metrics: List[Metric]=[], T=1):
+    def train_one_cycle(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], T=1):
         loss = None
 
         for metric in metrics:
@@ -113,10 +78,10 @@ class Training(Inference):
 
         self.model.train()
         with torch.train_mode():
-            for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc):
+            for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training { self.name }'):
                 batch = self.preprocess_batch_hook(batch)
 
-                input = self.batch_to_input(batch).to('cuda')
+                input = batch['inputs'].to('cuda')
                 output = self.model(input)
 
                 output.logits /= T
@@ -128,8 +93,9 @@ class Training(Inference):
 
                 self.optimizer.step()
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class TrainingWithCutmixMixup(Training):
+    # pass False to disable cutmix/mixup
     def __init__(self, *args, cutmix=None, mixup=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -149,6 +115,6 @@ class TrainingWithCutmixMixup(Training):
 
 
     def preprocess_batch_hook(self, batch):
-        self.set
+        batch['images'], batch['labels'] = self.transform(batch['images'], batch['labels'])
 
-        return super().preprocess_batch_hook(self.transform(images, labels))
+        return super().preprocess_batch_hook(batch)
