@@ -193,7 +193,7 @@ class Trainer():
     def finish_epoch(self, epoch):
         self.epochs.append(epoch)
 
-        self.save(epoch.idx)
+        self.save(epoch)
 
 
     def fit(self):

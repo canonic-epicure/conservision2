@@ -25,7 +25,7 @@ parser.add_argument('--lr', '--learning_rate', default=1e-4, type=float, help='i
 parser.add_argument('--max_epochs', default=15, type=int)
 parser.add_argument('--num_epochs', default=1, type=int)
 parser.add_argument('--num_folds', default=5, type=int)
-parser.add_argument('--num_workers', default=6, type=int, help='number of workers for prefetcing the data')
+parser.add_argument('--num_workers', default=6, type=int, help='number of workers for prefetching the data')
 parser.add_argument('--seed', default=123)
 parser.add_argument('--gpuid', default=0, type=int)
 
