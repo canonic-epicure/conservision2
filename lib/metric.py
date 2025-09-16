@@ -11,7 +11,7 @@ from torch.nn import functional as F
 if TYPE_CHECKING:
     from lib.training import Training, Inference
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class Metric():
     id: str
     name: str
@@ -30,7 +30,7 @@ class Metric():
     def value(self):
         raise NotImplementedError
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class Loss(Metric):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -38,7 +38,7 @@ class Loss(Metric):
     def backward(self, model: Training, input, output, batch):
         raise NotImplementedError
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class CrossEntropyLoss(Loss):
     ce: torch.nn.CrossEntropyLoss
     last_value: float
@@ -80,7 +80,7 @@ class CrossEntropyLoss(Loss):
     def backward(self, model: Training, input, output, batch):
         self.last_value.backward()
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 def sce_loss(logits, target, alpha=0.1, beta=1.0, num_classes=None, eps=1e-4, ce_func=None):
     ce = F.cross_entropy(logits, target, reduction='none')  # [N]
 
@@ -141,7 +141,7 @@ class SCELoss(Loss):
     def backward(self, model: Training, input, output, batch):
         self.last_value.backward()
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class ProbabilitiesMetric(Metric):
     pos: int
     probs : torch.Tensor
@@ -184,7 +184,7 @@ class ProbabilitiesMetric(Metric):
 
         self.pos += batch_size
 
-
+#-----------------------------------------------------------------------------------------------------------------------
 class AccuracyMetric(Metric):
     pos: int
     pred_cls_idx : torch.Tensor

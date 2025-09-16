@@ -98,7 +98,7 @@ class Trainer():
         seed=None, checkpoint_storage, training_cls=Training,
         dataloader_train=None, dataloader_val=None,
         loss=None, optimization_metric=None, metrics=[],
-        patience=5,
+        patience=3,
         has_saved_state=False,
         **kwargs
     ):
