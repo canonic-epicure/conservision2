@@ -22,7 +22,8 @@ parser = argparse.ArgumentParser(description='KFold training')
 parser.add_argument('--checkpoint_dir', default='checkpoints_convnext_large', type=str, help='directory for checkpoints')
 parser.add_argument('--batch_size', default=32, type=int, help='train batchsize')
 parser.add_argument('--lr', '--learning_rate', default=1e-4, type=float, help='initial learning rate')
-parser.add_argument('--num_epochs', default=15, type=int)
+parser.add_argument('--max_epochs', default=15, type=int)
+parser.add_argument('--num_epochs', default=1, type=int)
 parser.add_argument('--num_folds', default=5, type=int)
 parser.add_argument('--num_workers', default=6, type=int, help='number of workers for prefetcing the data')
 parser.add_argument('--seed', default=123)
@@ -63,8 +64,10 @@ class ConvNextLargeTraining(Training):
 
 #-----------------------------------------------------------------------------------------------------------------------
 trainer = ConvNextLargeTrainer.load_or_create(
-    name="Convnext large",
+    name="ConvNext large",
     num_classes=num_classes,
+    num_epochs=args.num_epochs,
+    max_epochs=args.max_epochs,
     model_id=model_id,
     checkpoint_storage=CheckpointStorage(dir=Path(args.checkpoint_dir)),
     training_cls=ConvNextLargeTraining,

@@ -79,7 +79,7 @@ class Training(Inference):
 
         self.model.train()
 
-        for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training { self.name }'):
+        for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training "{ self.name }"'):
             self.optimizer.zero_grad(set_to_none=True)
 
             batch = self.preprocess_batch_hook(batch)

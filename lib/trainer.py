@@ -53,8 +53,12 @@ class EarlyStopping():
             self.best_score = value
             self.best_score_at = len(self.tracking) - 1
             self.counter = 0
+
+            return True
         else:
             self.counter += 1
+
+            return False
 
     def should_stop(self):
         return self.counter >= self.patience
@@ -91,7 +95,7 @@ class Trainer():
         self,
         *args,
         name='Unknown trainer',
-        num_epochs=15, num_classes,
+        num_epochs=1, num_classes, max_epochs=15,
         model_id, model_preprocessor=None,
         seed=None, checkpoint_storage, training_cls=Training,
         dataloader_train=None, dataloader_val=None,
@@ -105,6 +109,7 @@ class Trainer():
         self.name = name
         self.num_classes = num_classes
         self.num_epochs = num_epochs
+        self.max_epochs = max_epochs
         self.model_id = model_id
         # self.model_preprocessor = model_preprocessor if model_preprocessor is not None else AutoImageProcessor.from_pretrained(model_id)
         self.training_cls = training_cls
@@ -147,7 +152,7 @@ class Trainer():
     def __getstate__(self):
         return {
             'name': self.name,
-            'num_epochs': self.num_epochs,
+            'max_epochs': self.max_epochs,
             'num_classes': self.num_classes,
             'model_id': self.model_id,
             'training': self.training,
@@ -206,7 +211,12 @@ class Trainer():
         metrics = [validation_metric, *self.metrics]
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
-        epoch_end = max(epoch_start + epochs_to_train, self.num_epochs)
+        epoch_end = epoch_start + epochs_to_train
+
+        if epoch_end > self.num_epochs: epoch_end = self.num_epochs
+
+        if epoch_start != 0:
+            print(f'Early stopping: best model at epoch {self.early_stopping.best_score_at} with score {self.early_stopping.best_score}')
 
         for epoch_idx in range(epoch_start, epoch_end):
             epoch = self.start_epoch(epoch_idx)
@@ -220,7 +230,7 @@ class Trainer():
             print(f'Train: loss={self.loss.value()}{ '' if self.optimization_metric is None else f' Optimization metric={self.optimization_metric.value()}'}')
 
             # Validation
-            self.training.infer(self.dataloader_val, metrics=metrics)
+            self.training.infer(self.dataloader_val, metrics=metrics, desc=f'Validation { self.name }')
 
             for metric in self.metrics:
                 epoch.push('validation/' + metric.id, metric.value())
@@ -230,8 +240,13 @@ class Trainer():
 
             self.finish_epoch(epoch_idx)
 
-            self.early_stopping.push(validation_metric.value())
+            is_better = self.early_stopping.push(validation_metric.value())
+
+            if is_better:
+                print(f'Early stopping: found better model')
 
             if self.early_stopping.should_stop():
                 print(f'Early stopping: {self.early_stopping.best_score} at epoch {self.early_stopping.best_score_at}')
                 break
+            else:
+                print(f'Early stopping: {self.early_stopping.patience - self.early_stopping.counter} epochs left')

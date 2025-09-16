@@ -81,6 +81,67 @@ class CrossEntropyLoss(Loss):
         self.last_value.backward()
 
 
+def sce_loss(logits, target, alpha=0.1, beta=1.0, num_classes=None, eps=1e-4, ce_func=None):
+    ce = F.cross_entropy(logits, target, reduction='none')  # [N]
+
+    # one-hot с клампом (можно подать сюда и mixup-таргеты [N,C] без клампа)
+    if num_classes is None:
+        num_classes = logits.size(1)
+
+    target = target.clamp_min(eps)  # [N,C]
+
+    p = F.softmax(logits, dim=1)
+    rce = -(p * target.log()).sum(dim=1)  # [N]
+
+    loss = alpha * ce + beta * rce
+    return loss.mean()
+
+
+class SCELoss(Loss):
+    num_classes: int
+    ce: torch.nn.CrossEntropyLoss
+    last_value: float
+
+    acc: float
+    count : int
+
+    track : List[float]
+
+    def __init__(self, *args, ce=None, **kwargs):
+        self.id = 'sce'
+        super().__init__(*args, **kwargs)
+        self.name = 'SCE loss'
+
+        self.num_classes = 0
+        self.acc = 0
+        self.count = 0
+        self.track = []
+
+        self.ce = ce if ce is not None else torch.nn.CrossEntropyLoss()
+        self.last_value = 0.0
+
+    def start(self, num_samples, num_batches, num_classes):
+        self.acc = 0
+        self.count = 0
+        self.track = []
+        self.num_classes = num_classes
+
+    def push(self, value, batch_size):
+        self.acc += value * batch_size
+        self.count += batch_size
+
+    def value(self):
+        return self.acc / self.count
+
+    def update(self, model: Inference, input, output, batch):
+        self.last_value = sce_loss(output.logits, batch['labels'].to('cuda'), num_classes=self.num_classes, ce_func=self.ce)
+        self.push(self.last_value, batch['inputs'].size(0))
+        self.track.append(self.last_value / batch['inputs'].size(0))
+
+    def backward(self, model: Training, input, output, batch):
+        self.last_value.backward()
+
+
 class ProbabilitiesMetric(Metric):
     pos: int
     probs : torch.Tensor
@@ -166,8 +227,6 @@ class AccuracyMetric(Metric):
         )
 
     def update(self, model, input, output, batch):
-        # preds = F.softmax(output.logits, dim=1)
-
         pred_cls_idx = output.logits.argmax(dim=1).to('cpu')
 
         batch_size = batch['inputs'].size(0)
