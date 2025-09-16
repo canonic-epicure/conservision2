@@ -17,5 +17,5 @@ wheels/
 /submission*.csv
 
 # checkpoints and run information
-/checkpoint_*
+/checkpoints_*
 /runs

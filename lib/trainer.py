@@ -142,19 +142,36 @@ class Trainer():
             num_classes=self.num_classes
         )
 
+    def __getstate__(self):
+        return {
+            'name': self.name,
+            'num_epochs': self.num_epochs,
+            'num_classes': self.num_classes,
+            'model_id': self.model_id,
+            'training': self.training,
+            'early_stopping': self.early_stopping,
+            'epochs': self.epochs,
+        }
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+
     @classmethod
     def load_or_create(cls, *args, checkpoint_storage, **kwargs):
         filename, epoch = checkpoint_storage.latest(r'checkpoint_(\d+).pth')
 
-        if filename is None:
-            return cls(*args, **{**kwargs, 'checkpoint_storage': checkpoint_storage})
-        else:
-            return torch.load(filename)
+        instance = cls(*args, **{**kwargs, 'checkpoint_storage': checkpoint_storage})
+
+        if filename is not None:
+            instance.__setstate__(torch.load(filename, weights_only=False))
+
+        return instance
 
 
     def save(self, epoch):
         self.checkpoint_storage.touch()
-        torch.save(self, self.checkpoint_storage.dir / f'checkpoint_{ str(epoch.idx).rjust(3, "0") }.pth')
+        torch.save(self.__getstate__(), self.checkpoint_storage.dir / f'checkpoint_{ str(epoch.idx).rjust(3, "0") }.pth')
 
 
     def resume(self):
@@ -169,7 +186,7 @@ class Trainer():
         return self.current_epoch
 
 
-    def finish_epoch(self):
+    def finish_epoch(self, epoch_idx):
         epoch = self.current_epoch
 
         self.epochs.append(epoch)
@@ -181,8 +198,8 @@ class Trainer():
     def fit(self, epochs_to_train=1):
         assert self.training is not None
 
-        metrics_with_loss = filter(lambda el: bool(el), [ self.loss, self.optimization_metric, *self.metrics ])
-        metrics = filter(lambda el: bool(el), [self.optimization_metric or self.loss, *self.metrics])
+        metrics_with_loss = list(filter(lambda el: bool(el), [ self.loss, self.optimization_metric, *self.metrics ]))
+        metrics = list(filter(lambda el: bool(el), [self.optimization_metric or self.loss, *self.metrics]))
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
         epoch_end = max(epoch_start + epochs_to_train, self.num_epochs)

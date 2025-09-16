@@ -15,7 +15,7 @@ class DatasetWithLabel(DatasetFix):
         super().__init__(*args, **kwargs)
 
     def get_label(self, idx):
-        return torch.tensor(self.labels.iloc[idx]).float()
+        return torch.tensor(self.labels.iloc[idx], dtype=torch.long)
 
     def __getitem__(self, idx):
         sup = super().__getitem__(idx)
@@ -52,7 +52,7 @@ class ImageDataset(DatasetFix):
 
         image, image_id = self.get_image(idx)
 
-        sup['images'] = image
+        sup['inputs'] = image
         sup['ids'] = image_id
 
         return sup

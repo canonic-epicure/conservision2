@@ -89,7 +89,7 @@ class Training(Inference):
             for metric in metrics:
                 metric.update(self.model, input, output, batch)
 
-            loss.backward()
+            loss.backward(self.model, input, output, batch)
 
             self.optimizer.step()
 

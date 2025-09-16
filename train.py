@@ -3,6 +3,7 @@ from pathlib import Path
 
 import torch.optim
 from torch.utils.data import DataLoader
+from torch.utils.hipify.hipify_python import preprocessor
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 from lib.checkpoint import CheckpointStorage
@@ -27,11 +28,15 @@ parser.add_argument('--gpuid', default=0, type=int)
 
 args = parser.parse_args()
 
-model_id = "facebook/convnext-large-384-22k-1k"
+# model_id = "facebook/convnext-large-384-22k-1k"
+model_id = "timm/convnext_large.fb_in22k"
 data_dir = Path(__file__) / "data"
 num_classes = len(src.data.species_labels)
+preprocessor = AutoImageProcessor.from_pretrained(model_id)
 
-
+model_preprocessor = lambda input: (
+    preprocessor(input)['pixel_values'][0]
+)
 
 class ConvNextLargeTrainer(Trainer):
     def create_model(self) -> Training:
@@ -39,7 +44,7 @@ class ConvNextLargeTrainer(Trainer):
             model_id,
             num_labels=self.num_classes,
             ignore_mismatched_sizes=True
-        )
+        ).to('cuda')
 
     def create_optimizer(self, model) -> Training:
         return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
@@ -51,7 +56,7 @@ class ConvNextLargeTraining(Training):
 
 
 
-trainer = ConvNextLargeTrainer(
+trainer = ConvNextLargeTrainer.load_or_create(
     name="Convnext large",
     num_classes=num_classes,
     model_id=model_id,
@@ -62,19 +67,19 @@ trainer = ConvNextLargeTrainer(
     metrics=[AccuracyMetric()],
     dataloader_train=DataLoader(
         ImageDatasetWithLabel(
-            data=src.data.train_all['filepath'].sample(n=500),
+            data=src.data.train_all['filepath'].sample(n=50),
             labels=src.data.train_all['label'],
-            processor=AutoImageProcessor.from_pretrained(model_id), aug=lib.transformations.transform_training
+            processor=model_preprocessor, aug=lib.transformations.transform_training
         ),
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
     ),
-    dataloader_validation=DataLoader(
+    dataloader_val=DataLoader(
         ImageDatasetWithLabel(
-            data=src.data.train_all['filepath'].sample(n=500),
+            data=src.data.train_all['filepath'].sample(n=50),
             labels=src.data.train_all['label'],
-            processor=AutoImageProcessor.from_pretrained(model_id), aug=lib.transformations.transform_training
+            processor=model_preprocessor, aug=lib.transformations.transform_training
         ),
         batch_size=args.batch_size,
         shuffle=True,

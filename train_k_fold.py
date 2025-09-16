@@ -37,7 +37,7 @@ parser.add_argument('--gpuid', default=0, type=int)
 
 args = parser.parse_args()
 
-model_id = "facebook/convnext-large-384-22k-1k"
+model_id = "convnext_large.fb_in22k"
 model_preprocessor = AutoImageProcessor.from_pretrained(model_id)
 data_dir = Path(__file__) / "data"
 num_classes = len(src.data.species_labels)

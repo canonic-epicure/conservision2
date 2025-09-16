@@ -73,7 +73,7 @@ class CrossEntropyLoss(Loss):
         return self.acc / self.count
 
     def update(self, model: Inference, input, output, batch):
-        self.last_value = self.ce(output.logits, batch['labels'])
+        self.last_value = self.ce(output.logits, batch['labels'].to('cuda'))
         self.push(self.last_value)
         self.track.append(self.last_value)
 
@@ -168,7 +168,7 @@ class AccuracyMetric(Metric):
     def update(self, model, input, output, batch):
         preds = F.softmax(output.logits, dim=1)
 
-        pred_cls_idx = preds.argmax(dim=1)
+        pred_cls_idx = preds.argmax(dim=1).to('cpu')
 
         batch_size = batch['inputs'].size(0)
 
