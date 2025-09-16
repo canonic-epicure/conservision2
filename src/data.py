@@ -35,6 +35,19 @@ for fold, (train_idx, val_idx) in enumerate(splitter.split(train_all, train_all[
     train_all.iloc[val_idx, train_all.columns.get_loc('fold')] = fold
 
 
+#-----------------------------------------------------------------------------------------------------------------------
+x = train_all
+y = train_labels
+val_sites = ['S0060','S0063','S0043','S0038','S0120','S0014']
+
+mask_val  = x['site'].isin(val_sites)
+
+x_train = x[ ~mask_val ]
+y_train = y[ ~mask_val ]
+
+x_eval = x[ mask_val ]
+y_eval = y[ mask_val ]
+
 # train_labels_refined = pd.read_csv("data/train_labels_refined.csv", index_col="id")
 #
 # assert all(train_labels.index == train_labels_refined.index)

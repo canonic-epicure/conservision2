@@ -11,7 +11,7 @@ from lib.metric import Metric, Loss, ProbabilitiesMetric
 
 #-----------------------------------------------------------------------------------------------------------------------
 class Inference():
-    name: str       = 'Unknown model'
+    name: str
 
     model: any
 
@@ -19,6 +19,7 @@ class Inference():
 
     def __init__(self, *args, name='Unknown model', model, num_classes=0, **kwargs):
         super().__init__(*args, **kwargs)
+        self.name = name
         self.model = model
         self.num_classes = num_classes
 
@@ -62,7 +63,7 @@ class Training(Inference):
         self.optimizer = optimizer
 
 
-    def train_one_cycle(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], T=1):
+    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], T=1):
         loss = None
 
         for metric in metrics:
@@ -88,6 +89,8 @@ class Training(Inference):
 
             for metric in metrics:
                 metric.update(self.model, input, output, batch)
+
+            print(f'Train: loss={loss.value()}')
 
             loss.backward(self.model, input, output, batch)
 

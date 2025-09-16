@@ -148,11 +148,11 @@ class AccuracyMetric(Metric):
         self.pos = 0
         self.pred_cls_idx = torch.zeros((num_samples), dtype=torch.int8)
         self.true_cls_idx = torch.zeros((num_samples), dtype=torch.int8)
-        self.accuracy = torch.zeros((num_samples), dtype=torch.float32)
+        self.accuracy = torch.zeros((num_samples), dtype=torch.int8)
         self.ids = np.empty((num_samples), dtype=np.dtypes.ObjectDType)
 
     def value(self):
-        return self.accuracy.mean()
+        return self.accuracy.float().mean()
 
     def value_as_df(self, columns=None):
         return pd.DataFrame(

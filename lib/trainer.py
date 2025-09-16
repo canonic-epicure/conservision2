@@ -66,7 +66,7 @@ class Trainer():
     name: str
     num_classes: int
     model_id: str
-    model_preprocessor: any
+    # model_preprocessor: any
     seed: int
     checkpoint_storage: CheckpointStorage
 
@@ -97,6 +97,7 @@ class Trainer():
         dataloader_train=None, dataloader_val=None,
         loss=None, optimization_metric=None, metrics=[],
         patience=5,
+        has_saved_state=False,
         **kwargs
     ):
         super().__init__()
@@ -105,7 +106,7 @@ class Trainer():
         self.num_classes = num_classes
         self.num_epochs = num_epochs
         self.model_id = model_id
-        self.model_preprocessor = model_preprocessor if model_preprocessor is not None else AutoImageProcessor.from_pretrained(model_id)
+        # self.model_preprocessor = model_preprocessor if model_preprocessor is not None else AutoImageProcessor.from_pretrained(model_id)
         self.training_cls = training_cls
         self.seed = seed
         self.checkpoint_storage = checkpoint_storage
@@ -120,8 +121,9 @@ class Trainer():
         self.dataloader_train = dataloader_train
         self.dataloader_val = dataloader_val
 
-        self.training = self.create_training()
-        self.early_stopping = EarlyStopping(patience=patience)
+        if not has_saved_state:
+            self.training = self.create_training()
+            self.early_stopping = EarlyStopping(patience=patience)
 
 
     def create_model(self):
@@ -161,7 +163,7 @@ class Trainer():
     def load_or_create(cls, *args, checkpoint_storage, **kwargs):
         filename, epoch = checkpoint_storage.latest(r'checkpoint_(\d+).pth')
 
-        instance = cls(*args, **{**kwargs, 'checkpoint_storage': checkpoint_storage})
+        instance = cls(*args, **{**kwargs, 'checkpoint_storage': checkpoint_storage, 'has_saved_state': filename is not None})
 
         if filename is not None:
             instance.__setstate__(torch.load(filename, weights_only=False))
@@ -198,17 +200,21 @@ class Trainer():
     def fit(self, epochs_to_train=1):
         assert self.training is not None
 
+        validation_metric = self.optimization_metric or self.loss
+
         metrics_with_loss = list(filter(lambda el: bool(el), [ self.loss, self.optimization_metric, *self.metrics ]))
-        metrics = list(filter(lambda el: bool(el), [self.optimization_metric or self.loss, *self.metrics]))
+        metrics = [validation_metric, *self.metrics]
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
         epoch_end = max(epoch_start + epochs_to_train, self.num_epochs)
+
+
 
         for epoch_idx in range(epoch_start, epoch_end):
             epoch = self.start_epoch(epoch_idx)
 
             # Training
-            self.training.train_one_cycle(self.dataloader_train, metrics=metrics_with_loss)
+            self.training.train(self.dataloader_train, metrics=metrics_with_loss)
 
             for metric in self.metrics:
                 epoch.push('traininig/' + metric.id, metric.value())
@@ -222,11 +228,11 @@ class Trainer():
                 epoch.push('validation/' + metric.id, metric.value())
                 print(f'Validation: {metric.name}={metric.value()}')
 
-            print(f'Validation: metric={(self.optimization_metric or self.loss).value()}')
+            print(f'Validation: metric={validation_metric.value()}')
 
             self.finish_epoch(epoch_idx)
 
-            self.early_stopping.push((self.optimization_metric or self.loss).value())
+            self.early_stopping.push(validation_metric.value())
 
             if self.early_stopping.should_stop():
                 print(f'Early stopping: {self.early_stopping.best_score} at epoch {self.early_stopping.best_score_at}')

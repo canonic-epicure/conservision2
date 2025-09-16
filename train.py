@@ -28,34 +28,33 @@ parser.add_argument('--gpuid', default=0, type=int)
 
 args = parser.parse_args()
 
-# model_id = "facebook/convnext-large-384-22k-1k"
+#-----------------------------------------------------------------------------------------------------------------------
 model_id = "timm/convnext_large.fb_in22k"
 data_dir = Path(__file__) / "data"
 num_classes = len(src.data.species_labels)
 preprocessor = AutoImageProcessor.from_pretrained(model_id)
+model_preprocessor = lambda input: preprocessor(input)['pixel_values'][0]
 
-model_preprocessor = lambda input: (
-    preprocessor(input)['pixel_values'][0]
-)
 
+#-----------------------------------------------------------------------------------------------------------------------
 class ConvNextLargeTrainer(Trainer):
-    def create_model(self) -> Training:
+    def create_model(self):
         return AutoModelForImageClassification.from_pretrained(
             model_id,
             num_labels=self.num_classes,
             ignore_mismatched_sizes=True
         ).to('cuda')
 
-    def create_optimizer(self, model) -> Training:
+    def create_optimizer(self, model):
         return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
 
 
+#-----------------------------------------------------------------------------------------------------------------------
 class ConvNextLargeTraining(Training):
     pass
 
 
-
-
+#-----------------------------------------------------------------------------------------------------------------------
 trainer = ConvNextLargeTrainer.load_or_create(
     name="Convnext large",
     num_classes=num_classes,
@@ -67,8 +66,10 @@ trainer = ConvNextLargeTrainer.load_or_create(
     metrics=[AccuracyMetric()],
     dataloader_train=DataLoader(
         ImageDatasetWithLabel(
-            data=src.data.train_all['filepath'].sample(n=50),
-            labels=src.data.train_all['label'],
+            # data=src.data.train_all['filepath'].sample(n=50),
+            # labels=src.data.train_all['label'],
+            data=src.data.x_train['filepath'],#.sample(n=50),
+            labels=src.data.x_train['label'],
             processor=model_preprocessor, aug=lib.transformations.transform_training
         ),
         batch_size=args.batch_size,
@@ -77,12 +78,14 @@ trainer = ConvNextLargeTrainer.load_or_create(
     ),
     dataloader_val=DataLoader(
         ImageDatasetWithLabel(
-            data=src.data.train_all['filepath'].sample(n=50),
-            labels=src.data.train_all['label'],
-            processor=model_preprocessor, aug=lib.transformations.transform_training
+            # data=src.data.train_all['filepath'].sample(n=50),
+            # labels=src.data.train_all['label'],
+            data=src.data.x_eval['filepath'],#.sample(n=50),
+            labels=src.data.x_eval['label'],
+            processor=model_preprocessor, aug=lib.transformations.transform_inference
         ),
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=args.num_workers,
     )
 )
