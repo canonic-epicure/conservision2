@@ -63,7 +63,7 @@ class Training(Inference):
         self.optimizer = optimizer
 
 
-    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], T=1):
+    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[]):
         loss = None
 
         for metric in metrics:
@@ -80,17 +80,15 @@ class Training(Inference):
         self.model.train()
 
         for idx, batch in tqdm.tqdm(enumerate(data_loader), total=len(data_loader), desc=desc if desc is not None else f'Training { self.name }'):
+            self.optimizer.zero_grad(set_to_none=True)
+
             batch = self.preprocess_batch_hook(batch)
 
             input = batch['inputs'].to('cuda')
             output = self.model(input)
 
-            output.logits /= T
-
             for metric in metrics:
                 metric.update(self.model, input, output, batch)
-
-            print(f'Train: loss={loss.value()}')
 
             loss.backward(self.model, input, output, batch)
 

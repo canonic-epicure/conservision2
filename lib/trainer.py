@@ -208,8 +208,6 @@ class Trainer():
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
         epoch_end = max(epoch_start + epochs_to_train, self.num_epochs)
 
-
-
         for epoch_idx in range(epoch_start, epoch_end):
             epoch = self.start_epoch(epoch_idx)
 

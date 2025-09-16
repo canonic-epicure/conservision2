@@ -12,6 +12,8 @@ from lib.metric import CrossEntropyLoss, AccuracyMetric
 from lib.trainer import Trainer
 from lib.training import Training
 
+from torchvision.transforms import v2, InterpolationMode
+
 import lib.transformations
 import src.data
 
@@ -19,7 +21,7 @@ parser = argparse.ArgumentParser(description='KFold training')
 
 parser.add_argument('--checkpoint_dir', default='checkpoints_convnext_large', type=str, help='directory for checkpoints')
 parser.add_argument('--batch_size', default=32, type=int, help='train batchsize')
-parser.add_argument('--lr', '--learning_rate', default=0.001, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning_rate', default=1e-4, type=float, help='initial learning rate')
 parser.add_argument('--num_epochs', default=15, type=int)
 parser.add_argument('--num_folds', default=5, type=int)
 parser.add_argument('--num_workers', default=6, type=int, help='number of workers for prefetcing the data')
@@ -30,10 +32,15 @@ args = parser.parse_args()
 
 #-----------------------------------------------------------------------------------------------------------------------
 model_id = "timm/convnext_large.fb_in22k"
+# model_id = "facebook/convnext-large-384-22k-1k"
+# model_id = "google/siglip2-base-patch16-256"
 data_dir = Path(__file__) / "data"
 num_classes = len(src.data.species_labels)
 preprocessor = AutoImageProcessor.from_pretrained(model_id)
-model_preprocessor = lambda input: preprocessor(input)['pixel_values'][0]
+def model_preprocessor(input):
+    processed = preprocessor(images=input, return_tensors="pt")
+
+    return processed['pixel_values'].squeeze(0)
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -46,7 +53,7 @@ class ConvNextLargeTrainer(Trainer):
         ).to('cuda')
 
     def create_optimizer(self, model):
-        return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+        return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -61,7 +68,7 @@ trainer = ConvNextLargeTrainer.load_or_create(
     model_id=model_id,
     checkpoint_storage=CheckpointStorage(dir=Path(args.checkpoint_dir)),
     training_cls=ConvNextLargeTraining,
-    loss=CrossEntropyLoss(),
+    loss=CrossEntropyLoss(ce=torch.nn.CrossEntropyLoss(label_smoothing=0.1)),
     optimization_metric=None,
     metrics=[AccuracyMetric()],
     dataloader_train=DataLoader(
