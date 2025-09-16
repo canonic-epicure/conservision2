@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.hipify.hipify_python import preprocessor
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
-from lib.checkpoint import CheckpointStorage
+from lib.checkpoint import CheckpointStorage, set_seed
 from lib.dataset import ImageDatasetWithLabel
 from lib.metric import CrossEntropyLoss, AccuracyMetric
 from lib.trainer import Trainer
@@ -29,9 +29,11 @@ parser.add_argument('--num_workers', default=6, type=int, help='number of worker
 parser.add_argument('--seed', default=123)
 parser.add_argument('--gpuid', default=0, type=int)
 
-args = parser.parse_args()
+args = parser.parse_args('')
 
 #-----------------------------------------------------------------------------------------------------------------------
+set_seed(args.seed, True)
+
 model_id = "timm/convnext_large.fb_in22k"
 # model_id = "facebook/convnext-large-384-22k-1k"
 # model_id = "google/siglip2-base-patch16-256"
@@ -60,6 +62,9 @@ class ConvNextLargeTrainer(Trainer):
 #-----------------------------------------------------------------------------------------------------------------------
 class ConvNextLargeTraining(Training):
     pass
+
+import __main__
+__main__.ConvNextLargeTraining = ConvNextLargeTraining
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -100,4 +105,5 @@ trainer = ConvNextLargeTrainer.load_or_create(
     )
 )
 
-trainer.resume()
+if __name__ == "__main__":
+    trainer.resume()

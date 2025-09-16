@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms.v2 as v2
 from transformers import AutoImageProcessor
 
-from lib.checkpoint import CheckpointStorage
+from lib.checkpoint import CheckpointStorage, get_rng_state, set_rng_state
 from lib.metric import Metric, Loss, ProbabilitiesMetric, CrossEntropyLoss, AccuracyMetric
 from lib.training import Training
 
@@ -29,7 +29,7 @@ class Epoch():
 
 #-----------------------------------------------------------------------------------------------------------------------
 class EarlyStopping():
-    def __init__(self, *args, bigger_is_better=False, patience=5, **kwargs):
+    def __init__(self, *args, bigger_is_better=False, patience=3, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.patience = patience
@@ -70,14 +70,12 @@ class Trainer():
     name: str
     num_classes: int
     model_id: str
-    # model_preprocessor: any
     seed: int
     checkpoint_storage: CheckpointStorage
 
     num_epochs: int
 
     epochs : List[Epoch]
-    current_epoch: Epoch
 
     dataloader_train: any
     dataloader_val: any
@@ -111,7 +109,6 @@ class Trainer():
         self.num_epochs = num_epochs
         self.max_epochs = max_epochs
         self.model_id = model_id
-        # self.model_preprocessor = model_preprocessor if model_preprocessor is not None else AutoImageProcessor.from_pretrained(model_id)
         self.training_cls = training_cls
         self.seed = seed
         self.checkpoint_storage = checkpoint_storage
@@ -120,7 +117,6 @@ class Trainer():
         self.optimization_metric = optimization_metric
         self.metrics = metrics
 
-        self.current_epoch = None
         self.epochs = []
 
         self.dataloader_train = dataloader_train
@@ -158,10 +154,13 @@ class Trainer():
             'training': self.training,
             'early_stopping': self.early_stopping,
             'epochs': self.epochs,
+            'rng' : get_rng_state()
         }
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        if state['rng']:
+            set_rng_state(state['rng'])
 
 
     @classmethod
@@ -188,21 +187,16 @@ class Trainer():
     def start_epoch(self, idx):
         print(f'Starting epoch {idx}')
 
-        self.current_epoch = Epoch(idx=idx)
-
-        return self.current_epoch
+        return Epoch(idx=idx)
 
 
-    def finish_epoch(self, epoch_idx):
-        epoch = self.current_epoch
-
+    def finish_epoch(self, epoch):
         self.epochs.append(epoch)
-        self.current_epoch = None
 
-        self.save(epoch)
+        self.save(epoch.idx)
 
 
-    def fit(self, epochs_to_train=1):
+    def fit(self):
         assert self.training is not None
 
         validation_metric = self.optimization_metric or self.loss
@@ -211,9 +205,13 @@ class Trainer():
         metrics = [validation_metric, *self.metrics]
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
-        epoch_end = epoch_start + epochs_to_train
+        epoch_end = epoch_start + self.num_epochs
 
-        if epoch_end > self.num_epochs: epoch_end = self.num_epochs
+        if epoch_start >= self.max_epochs:
+            print(f'Already trained for maximum number of epochs {self.max_epochs}')
+            return
+        if epoch_end > self.max_epochs:
+            epoch_end = self.max_epochs
 
         if epoch_start != 0:
             print(f'Early stopping: best model at epoch {self.early_stopping.best_score_at} with score {self.early_stopping.best_score}')
@@ -238,7 +236,7 @@ class Trainer():
 
             print(f'Validation: metric={validation_metric.value()}')
 
-            self.finish_epoch(epoch_idx)
+            self.finish_epoch(epoch)
 
             is_better = self.early_stopping.push(validation_metric.value())
 
