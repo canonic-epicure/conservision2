@@ -9,7 +9,7 @@ from transformers import AutoImageProcessor, AutoModelForImageClassification
 from lib.checkpoint import CheckpointStorage, set_seed
 from lib.dataset import ImageDatasetWithLabel
 from lib.metric import CrossEntropyLoss, AccuracyMetric
-from lib.trainer import Trainer
+from lib.trainer import Trainer, EarlyStopping
 from lib.training import Training
 
 from torchvision.transforms import v2, InterpolationMode
@@ -79,6 +79,7 @@ trainer = ConvNextLargeTrainer.load_or_create(
     loss=CrossEntropyLoss(ce=torch.nn.CrossEntropyLoss(label_smoothing=0.1)),
     optimization_metric=None,
     metrics=[AccuracyMetric()],
+    early_stopping=EarlyStopping(patience=3),
     dataloader_train=DataLoader(
         ImageDatasetWithLabel(
             # data=src.data.train_all['filepath'].sample(n=50),

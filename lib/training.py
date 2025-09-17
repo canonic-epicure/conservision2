@@ -53,6 +53,7 @@ class Inference():
 
         return probs
 
+
 #-----------------------------------------------------------------------------------------------------------------------
 class Training(Inference):
     optimizer: any
@@ -63,7 +64,7 @@ class Training(Inference):
         self.optimizer = optimizer
 
 
-    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[]):
+    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], on_step=None):
         loss = None
 
         for metric in metrics:
@@ -94,9 +95,12 @@ class Training(Inference):
 
             self.optimizer.step()
 
+
 #-----------------------------------------------------------------------------------------------------------------------
 class TrainingWithCutmixMixup(Training):
-    # pass False to disable cutmix/mixup
+    transform: any
+
+    # pass cutmix=False / mixup=False to disable cutmix/mixup
     def __init__(self, *args, cutmix=None, mixup=None, **kwargs):
         super().__init__(*args, **kwargs)
 
