@@ -46,10 +46,10 @@ class Inference():
                     metric.update(self.model, input, output, batch)
 
 
-    def predict_proba(self, data_loader: DataLoader, desc='Predicting', T=1):
+    def predict_proba(self, data_loader: DataLoader, metrics: List[Metric]=[], desc='Predicting', T=1):
         probs = ProbabilitiesMetric()
 
-        self.infer(data_loader, desc, [probs], T)
+        self.infer(data_loader, desc, [probs].extend(metrics), T)
 
         return probs
 

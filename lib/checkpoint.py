@@ -9,26 +9,33 @@ import torch
 
 class CheckpointStorage():
     dir : Path
+    pattern : str
 
-    def __init__(self, *args, dir: Path, **kwargs):
-        self.dir = dir
+    def __init__(self, *args, dir: Path, pattern: str, reg: str, **kwargs):
+        if not isinstance(reg, Path): self.dir = Path(dir)
+
+        self.pattern = pattern
+
+        if not isinstance(reg, re.Pattern): reg = re.compile(reg)
+
+        self.reg = reg
+
         super().__init__(*args, **kwargs)
 
+    def at_epoch(self, idx):
+        return self.dir / re.sub(pattern=r'\*', repl=str(idx).rjust(3, '0'), string=self.pattern)
 
     def touch(self):
         self.dir.mkdir(parents=True, exist_ok=True)
 
-    def latest(self, reg: Union[re.Pattern, str]) -> (Path, int):
+    def latest(self) -> (Path, int):
         if not self.dir.exists():
             return None, None
-
-        if not isinstance(reg, re.Pattern):
-            reg = re.compile(reg)
 
         def collect():
             for root, dirs, files in os.walk(self.dir):
                 for file in files:
-                    match = reg.match(file)
+                    match = self.reg.match(file)
                     if match:
                         yield file, int(match.group(1))
 

@@ -126,6 +126,8 @@ class Trainer():
         self.dataloader_train = dataloader_train
         self.dataloader_val = dataloader_val
 
+        self.uses_best_model = False
+
         if not has_saved_state:
             self.training = self.create_training()
             self.early_stopping = early_stopping
@@ -168,20 +170,24 @@ class Trainer():
 
 
     @classmethod
-    def load_or_create(cls, *args, checkpoint_storage, **kwargs):
-        filename, epoch = checkpoint_storage.latest(r'checkpoint_(\d+).pth')
+    def load_or_create(cls, *args, checkpoint_storage: CheckpointStorage, use_best_model=False, **kwargs):
+        filename, epoch = checkpoint_storage.latest()
 
         instance = cls(*args, **{**kwargs, 'checkpoint_storage': checkpoint_storage, 'has_saved_state': filename is not None})
 
         if filename is not None:
             instance.__setstate__(torch.load(filename, weights_only=False))
 
+            if use_best_model and instance.early_stopping:
+                instance.__setstate__(torch.load(checkpoint_storage.at_epoch(instance.early_stopping.best_score_at), weights_only=False))
+                instance.uses_best_model = True
+
         return instance
 
 
     def save(self, epoch):
         self.checkpoint_storage.touch()
-        torch.save(self.__getstate__(), self.checkpoint_storage.dir / f'checkpoint_{ str(epoch.idx).rjust(3, "0") }.pth')
+        torch.save(self.__getstate__(), self.checkpoint_storage.at_epoch(epoch.idx))
 
 
     def resume(self):
@@ -226,7 +232,7 @@ class Trainer():
             # Training
             self.training.train(self.dataloader_train, metrics=metrics_with_loss)
 
-            for metric in self.metrics:
+            for metric in metrics_with_loss:
                 epoch.push('traininig/' + metric.id, metric.value())
 
             print(f'Train: Loss {self.loss.name}={self.loss.value():.3f}{ '' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value()}'}')
@@ -234,8 +240,10 @@ class Trainer():
             # Validation
             self.training.infer(self.dataloader_val, metrics=metrics, desc=f'Validation { self.name }')
 
-            for metric in self.metrics:
+            for metric in metrics_with_loss:
                 epoch.push('validation/' + metric.id, metric.value())
+
+            for metric in self.metrics:
                 print(f'Validation: {metric.name}={metric.value():.3f}')
 
             print(f'Validation: Loss {self.loss.name}={self.loss.value():.3f}{ '' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value()}'}')
