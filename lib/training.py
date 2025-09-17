@@ -64,19 +64,11 @@ class Training(Inference):
         self.optimizer = optimizer
 
 
-    def train(self, data_loader: DataLoader, desc=None, metrics: List[Metric]=[], on_step=None):
-        loss = None
+    def train(self, data_loader: DataLoader, loss: Loss, metrics: List[Metric]=[], desc=None):
+        all_metrics = [loss] + metrics
 
-        for metric in metrics:
+        for metric in all_metrics:
             metric.start(len(data_loader.dataset), len(data_loader), self.num_classes)
-
-            if isinstance(metric, Loss):
-                if loss is not None:
-                    raise ValueError("Only one loss metric can be provided")
-                loss = metric
-
-        if loss is None:
-            raise ValueError("No loss metric provided")
 
         self.model.train()
 
@@ -88,7 +80,7 @@ class Training(Inference):
             input = batch['inputs'].to('cuda')
             output = self.model(input)
 
-            for metric in metrics:
+            for metric in all_metrics:
                 metric.update(self.model, input, output, batch)
 
             loss.backward(self.model, input, output, batch)

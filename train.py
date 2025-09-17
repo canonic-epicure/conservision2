@@ -8,7 +8,7 @@ from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 from lib.checkpoint import CheckpointStorage, set_seed
 from lib.dataset import ImageDatasetWithLabel, ImageDataset
-from lib.metric import CrossEntropyLoss, AccuracyMetric
+from lib.metric import CrossEntropyLoss, AccuracyMetric, SCELoss
 from lib.trainer import Trainer, EarlyStopping
 from lib.training import Training
 
@@ -32,13 +32,15 @@ parser.add_argument('--gpuid', default=0, type=int)
 args = parser.parse_args('')
 
 #-----------------------------------------------------------------------------------------------------------------------
-set_seed(args.seed, True)
+# set_seed(args.seed, True)
 
 model_id = "timm/convnext_large.fb_in22k"
 # model_id = "facebook/convnext-large-384-22k-1k"
 # model_id = "google/siglip2-base-patch16-256"
+
 data_dir = Path(__file__) / "data"
 num_classes = len(src.data.species_labels)
+
 preprocessor = AutoImageProcessor.from_pretrained(model_id)
 def model_preprocessor(input):
     processed = preprocessor(images=input, return_tensors="pt")
@@ -78,35 +80,29 @@ def get_trainer(use_best_model=False):
         max_epochs=args.max_epochs,
         model_id=model_id,
         training_cls=ConvNextLargeTraining,
-        loss=CrossEntropyLoss(ce=torch.nn.CrossEntropyLoss(label_smoothing=0.1)),
+        # loss=CrossEntropyLoss(ce=torch.nn.CrossEntropyLoss(label_smoothing=0.1)),
+        loss=SCELoss(label_smoothing=0.1),
         optimization_metric=None,
-        metrics=[AccuracyMetric()],
+        metrics=[AccuracyMetric(), CrossEntropyLoss(ce=torch.nn.CrossEntropyLoss(label_smoothing=0.1))],
         early_stopping=EarlyStopping(patience=3),
-        dataloader_train=DataLoader(
-            ImageDatasetWithLabel(
-                # data=src.data.train_all['filepath'].sample(n=50),
-                # labels=src.data.train_all['label'],
-                data=src.data.x_train['filepath'],#.sample(n=50),
-                labels=src.data.x_train['label'],
-                processor=model_preprocessor, aug=lib.transformations.transform_training
-            ),
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
+        dataloader_train=get_training_data_loader(
+            src.data.x_train['filepath'],
+            src.data.x_train['label']
         ),
-        dataloader_val=DataLoader(
-            ImageDatasetWithLabel(
-                # data=src.data.train_all['filepath'].sample(n=50),
-                # labels=src.data.train_all['label'],
-                data=src.data.x_eval['filepath'],#.sample(n=50),
-                labels=src.data.x_eval['label'],
-                processor=model_preprocessor, aug=lib.transformations.transform_inference
-            ),
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=args.num_workers,
+        dataloader_val=get_training_data_loader(
+            src.data.x_eval['filepath'],
+            src.data.x_eval['label'],
+            shuffle=False
         ),
         use_best_model=use_best_model,
+    )
+
+def get_training_data_loader(data, labels, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers):
+    return DataLoader(
+        ImageDatasetWithLabel(data=data, labels=labels, processor=model_preprocessor, aug=lib.transformations.transform_training),
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
     )
 
 def get_inference_data_loader(data, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers):

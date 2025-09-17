@@ -81,17 +81,18 @@ class CrossEntropyLoss(Loss):
         self.last_value.backward()
 
 #-----------------------------------------------------------------------------------------------------------------------
-def sce_loss(logits, target, alpha=0.1, beta=1.0, num_classes=None, eps=1e-4, ce_func=None):
-    ce = F.cross_entropy(logits, target, reduction='none')  # [N]
+def sce_loss(logits, target, alpha=0.1, beta=1.0, num_classes=None, label_smoothing=0, eps=1e-4):
+    # target: LongTensor [N]
+    ce = F.cross_entropy(logits, target, label_smoothing=0, reduction='none')  # [N]
 
     # one-hot с клампом (можно подать сюда и mixup-таргеты [N,C] без клампа)
     if num_classes is None:
         num_classes = logits.size(1)
-
-    target = target.clamp_min(eps)  # [N,C]
+    y = F.one_hot(target, num_classes=num_classes).float()
+    y = y.clamp_min(eps)  # [N,C]
 
     p = F.softmax(logits, dim=1)
-    rce = -(p * target.log()).sum(dim=1)  # [N]
+    rce = -(p * y.log()).sum(dim=1)  # [N]
 
     loss = alpha * ce + beta * rce
     return loss.mean()
@@ -99,7 +100,7 @@ def sce_loss(logits, target, alpha=0.1, beta=1.0, num_classes=None, eps=1e-4, ce
 
 class SCELoss(Loss):
     num_classes: int
-    ce: torch.nn.CrossEntropyLoss
+    label_smoothing: float
     last_value: float
 
     acc: float
@@ -107,7 +108,7 @@ class SCELoss(Loss):
 
     track : List[float]
 
-    def __init__(self, *args, ce=None, **kwargs):
+    def __init__(self, *args, label_smoothing=0, **kwargs):
         self.id = 'sce'
         super().__init__(*args, **kwargs)
         self.name = 'SCE loss'
@@ -117,7 +118,7 @@ class SCELoss(Loss):
         self.count = 0
         self.track = []
 
-        self.ce = ce if ce is not None else torch.nn.CrossEntropyLoss()
+        self.label_smoothing = label_smoothing
         self.last_value = 0.0
 
     def start(self, num_samples, num_batches, num_classes):
@@ -134,7 +135,7 @@ class SCELoss(Loss):
         return self.acc / self.count
 
     def update(self, model: Inference, input, output, batch):
-        self.last_value = sce_loss(output.logits, batch['labels'].to('cuda'), num_classes=self.num_classes, ce_func=self.ce)
+        self.last_value = sce_loss(output.logits, batch['labels'].to('cuda'), num_classes=self.num_classes, label_smoothing=self.label_smoothing)
         self.push(self.last_value, batch['inputs'].size(0))
         self.track.append(self.last_value / batch['inputs'].size(0))
 

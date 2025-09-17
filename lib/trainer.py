@@ -165,8 +165,7 @@ class Trainer():
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        if state['rng']:
-            set_rng_state(state['rng'])
+        set_rng_state(state['rng'])
 
 
     @classmethod
@@ -211,8 +210,7 @@ class Trainer():
 
         validation_metric = self.optimization_metric or self.loss
 
-        metrics_with_loss = list(filter(lambda el: bool(el), [ self.loss, self.optimization_metric, *self.metrics ]))
-        metrics = [validation_metric, *self.metrics]
+        all_metrics = list(filter(bool, [ self.loss, self.optimization_metric, *self.metrics ]))
 
         epoch_start = self.epochs[-1].idx + 1 if len(self.epochs) > 0 else 0
         epoch_end = epoch_start + self.num_epochs
@@ -224,29 +222,34 @@ class Trainer():
             epoch_end = self.max_epochs
 
         if self.early_stopping.best_score_at is not None:
-            print(f'Early stopping: best model at epoch {self.early_stopping.best_score_at} with score {self.early_stopping.best_score}, {self.early_stopping.left} epochs left')
+            print(f'Early stopping: best model at epoch {self.early_stopping.best_score_at} with score {self.early_stopping.best_score:.4f}, {self.early_stopping.left} epochs left')
 
         for epoch_idx in range(epoch_start, epoch_end):
             epoch = self.start_epoch(epoch_idx)
 
             # Training
-            self.training.train(self.dataloader_train, metrics=metrics_with_loss)
+            self.training.train(self.dataloader_train, self.loss, metrics=list(filter(bool, [ self.optimization_metric, *self.metrics ])))
 
-            for metric in metrics_with_loss:
+            for metric in all_metrics:
                 epoch.push('traininig/' + metric.id, metric.value())
 
-            print(f'Train: Loss {self.loss.name}={self.loss.value():.3f}{ '' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value()}'}')
-
-            # Validation
-            self.training.infer(self.dataloader_val, metrics=metrics, desc=f'Validation { self.name }')
-
-            for metric in metrics_with_loss:
-                epoch.push('validation/' + metric.id, metric.value())
+            print(f'Loss {self.loss.name}={self.loss.value():.4f}{ '' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value():.4f}'}')
 
             for metric in self.metrics:
-                print(f'Validation: {metric.name}={metric.value():.3f}')
+                print(f'{metric.name}={metric.value():.4f}')
 
-            print(f'Validation: Loss {self.loss.name}={self.loss.value():.3f}{ '' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value()}'}')
+            print('')
+
+            # Validation
+            self.training.infer(self.dataloader_val, metrics=all_metrics, desc=f'Validation { self.name }')
+
+            for metric in all_metrics:
+                epoch.push('validation/' + metric.id, metric.value())
+
+            print(f'Loss {self.loss.name}={self.loss.value():.4f}{'' if self.optimization_metric is None else f', metric {self.optimization_metric.name}={self.optimization_metric.value():.4f}'}')
+
+            for metric in self.metrics:
+                print(f'{metric.name}={metric.value():.4f}')
 
             is_better = self.early_stopping.push(validation_metric.value())
 
@@ -256,7 +259,7 @@ class Trainer():
                 print(f'Early stopping: found better model at epoch {epoch_idx}')
 
             if self.early_stopping.should_stop():
-                print(f'Early stopping: {self.early_stopping.best_score} at epoch {self.early_stopping.best_score_at}')
+                print(f'Early stopping: {self.early_stopping.best_score:.4f} at epoch {self.early_stopping.best_score_at}')
                 break
             else:
                 print(f'Early stopping: {self.early_stopping.left} epochs left')
